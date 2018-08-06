@@ -1,0 +1,20 @@
+# Data types
+RegisterBank KEYWORD1
+RegisterData KEYWORD1
+register_callback_t KEYWORD1
+
+# Methods
+event_handler KEYWORD2
+add_callback KEYWORD2
+del_callback KEYWORD2
+
+# Constants (LITERAL1)
+ROP_READ_8
+ROP_READ_16
+ROP_READ_32
+ROP_READ_MB
+ROP_WRITE_8
+ROP_WRITE_16
+ROP_WRITE_32
+ROP_WRITE_MB
+MAX_MB_SIZE
