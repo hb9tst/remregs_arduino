@@ -1,8 +1,8 @@
 /**
  * \file   remregs.cpp
  * \brief  Arduino implementation of a register bank compatible with the remregs library
- * \author Alessandro Crespi
- * \date   August 2016
+ * \author Alessandro Crespi, some code originally implemented by Jeremie Knuesel
+ * \date   August 2016, updated May 2020
  */
 
 #include "remregs.h"
@@ -12,7 +12,7 @@
 #define SYNC_CHECKSUM 2        ///< same as SYNC_OK, but enable use of data checksums (not implemented yet)
 
 #define ACK           6        ///< acknowledge transmission
-#define NAK          15        ///< negative acknowledge (e.g. checksum error)
+#define NAK          15        ///< negative acknowledge (e.g. checksum error, timeout, NAK on unhandled read)
 
 RegisterBank::RegisterBank(HardwareSerial& s) : port(s), sync_state(SYNC_NONE), timeout(false)
 {
@@ -33,7 +33,7 @@ uint8_t RegisterBank::read_byte()
   timeout = false;
   
   uint8_t result;
-  if (port.readBytes(&result, 1) == 1) {
+  if (port.readBytes((char*) &result, 1) == 1) {
     return result;
   } else {
     timeout = true;
@@ -124,22 +124,24 @@ void RegisterBank::event_handler()
     }
   }
 
+  bool result(true);
+
   // Calls the appropriate function
   switch (op) {
     case ROP_READ_8:  // byte read
-      callbacks_call_one(op, addr);
+      result = callbacks_call_one(op, addr);
       cnt = 1;
       break;
     case ROP_READ_16:  // word read
-      callbacks_call_one(op, addr);
+      result = callbacks_call_one(op, addr);
       cnt = 2;
       break;
     case ROP_READ_32:  // dword read
-      callbacks_call_one(op, addr);
+      result = callbacks_call_one(op, addr);
       cnt = 4;
       break;
     case ROP_READ_MB:  // multibyte read
-      callbacks_call_one(op, addr);
+      result = callbacks_call_one(op, addr);
       cnt = regdata2.multibyte.size + 1;
       break;
     case ROP_WRITE_8:  // 8-bit write
@@ -161,12 +163,16 @@ void RegisterBank::event_handler()
   }
 */
 
-  // ACKnowledge byte
-  port.write(ACK);
-  
-  // Sends any output bytes
-  for (uint8_t i = 0; i < cnt; i++) {
-    port.write(regdata2.bytes[i]);
+  if (result) {
+    // ACKnowledge byte
+    port.write(ACK);
+    
+    // Sends any output bytes
+    for (uint8_t i = 0; i < cnt; i++) {
+      port.write(regdata2.bytes[i]);
+    }
+  } else {
+    port.write(NAK);
   }
 
 }
@@ -184,7 +190,7 @@ bool RegisterBank::callbacks_call_one(const uint8_t operation, const uint8_t add
 {
   for (uint8_t i(0); i < MAX_REG_CALLBACKS; i++) {
     if (callbacks[i] != NULL && callbacks[i](operation, address, &regdata2))
-    return true;
+      return true;
   }
   return false;
 }
